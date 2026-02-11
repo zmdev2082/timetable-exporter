@@ -116,31 +116,32 @@ You can use the default template at [data/presets/week_view.template.json](data/
 
 ## Command-Line Options
 
+You can use various command-line options to customize the output. For example:
 
-   You can use various command-line options to customize the output. For example:
-   ```
-   options:
-      -h, --help            show this help message and exit
-      --list-presets        List built-in mapping/filter presets and exit.
-      --mapping MAPPING     Path to the JSON file containing mapping/config.
-      --mapping-preset MAPPING_PRESET Built-in mapping preset name (see --list-presets).
-      --filters FILTERS_FILE Path to the JSON file containing filters.
-      --filters-preset FILTERS_PRESET Built-in filters preset name (see --list-presets).
-      --exact               Use exact matching for filters.
-      --timezone TIMEZONE   Timezone for the events (default: Australia/Sydney).
-      --output_dir OUTPUT_DIR
-      --week-view-output WEEK_VIEW_OUTPUT
-      --week-view-template WEEK_VIEW_TEMPLATE
-      --week-view-calendar WEEK_VIEW_CALENDAR
-      --skip-extensions SKIP_EXTENSIONS  Comma-separated list of user extension functions to skip.
+```text
+options:
+    -h, --help            show this help message and exit
+    --list-presets        List built-in mapping/filter presets and exit.
+    --mapping MAPPING     Path to the JSON file containing mapping/config.
+    --mapping-preset MAPPING_PRESET Built-in mapping preset name (see --list-presets).
+    --filters FILTERS_FILE Path to the JSON file containing filters.
+    --filters-preset FILTERS_PRESET Built-in filters preset name (see --list-presets).
+    --exact               Use exact matching for filters.
+    --timezone TIMEZONE   Timezone for the events (default: Australia/Sydney).
+    --output_dir OUTPUT_DIR
+    --week-view-output WEEK_VIEW_OUTPUT
+    --week-view-template WEEK_VIEW_TEMPLATE
+    --week-view-calendar WEEK_VIEW_CALENDAR
+    --skip-extensions SKIP_EXTENSIONS  Comma-separated list of user extension functions to skip.
+```
 
-   ## Custom user extensions
+## Custom user extensions
 
-   You can add custom DataFrame helpers by dropping a Python file into [timetable_exporter/user_extensions](timetable_exporter/user_extensions). Every public function in those files is automatically attached to the `timetable` accessor (e.g., `df.timetable.my_func(...)`).
+You can add custom DataFrame helpers by dropping a Python file into [timetable_exporter/user_extensions](timetable_exporter/user_extensions). Every public function in those files is automatically attached to the `timetable` accessor (e.g., `df.timetable.my_func(...)`).
 
-   How it works:
-   - The package auto-imports every `.py` file in that folder at runtime.
-   - Every top-level name that doesn’t start with `__` is added to `TimetableAccessor`.
+How it works:
+- The package auto-imports every `.py` file in that folder at runtime.
+- Every top-level name that doesn’t start with `__` is added to `TimetableAccessor`.
 
 
 ## Data layout
