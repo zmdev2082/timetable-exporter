@@ -1,13 +1,29 @@
+# Development artifacts
 .history/
 .vscode/
-
-__pycache__
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
 .venv/
-
 .envrc
+.env
 
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Package manager files
 Pipfile
 Pipfile.lock
 
-dist/
-tests/
+# Proprietary/sensitive data
+**/proprietary/
+*.secret
+*.key
+
+# Generated output
+output/

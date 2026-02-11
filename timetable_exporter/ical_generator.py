@@ -1,71 +1,73 @@
-import json
 from datetime import datetime, timedelta
 from icalendar import Calendar, Event
 import uuid
+import logging
+from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 class IcalGenerator:
     REQUIRED_FIELDS = ['summary', 'location']
-    ics_mapping = {
-        'summary': 'summary',
-        'location': 'location',
-        'description': 'description', 
-        'time_start': 'dtstart',
-        'duration': 'duration',
-        'start': 'dtstart',
-        'end': 'dtend',
-        'attendees': 'attendee',
-        'categories': 'categories'
-    }
-    def __init__(self, file_name, config_file, timezone='Australia/Sydney'):
-        # Ensure the file name ends with .ics
-        if not file_name.endswith('.ics'):
-            raise ValueError("Output file must have a .ics extension")
-        
-        self.file_name = file_name
-        with open(config_file, 'r') as f:
-            config = json.load(f)
-            self.columns = config["columns"]
-            self.additional_parsing = config["additional_parsing"]
+    VALID_FIELDS = ['summary', 'location', 'description', 'dtstart', 'dtend', 'duration', 'category', 'attendee', 'organizer', 'url']
+    def __init__(self, columns, timezone: str = 'Australia/Sydney'):
 
+        self.columns = columns
+        self.timezone = ZoneInfo(timezone)
         # Check if all required fields are present in the config
         for field in self.REQUIRED_FIELDS:
             if field not in self.columns:
                 raise ValueError(f"Missing required field in config: {field}")
 
         # check if start and end or date_start, time_start and duration are present
-        if not (('start' in self.columns and 'end' in self.columns) or
-                ('date_start' in self.columns and 'time_start' in self.columns and 'duration' in self.columns)):
-            raise ValueError("Event time fields need to be configured as: (start & end) or (date_start & time_start & (date_end & time_end | duration)")
-        self.timezone  = timezone
+        if not (("dtstart" in self.columns and "dtend" in self.columns) or
+            ("dtstart" in self.columns and "duration" in self.columns)):
+            raise ValueError("Event time fields need to be configured as: (dtstart & dtend) or (dtstart & duration)")
+
 
     def add_event_property(self, event, key, value, entry):
 
-        if key in self.additional_parsing:
-            parse = self.additional_parsing[key]
-            value = getattr(value,parse["func"])(*parse["args"], **parse["kwargs"])
+        if key in ['dtstart', 'dtend']:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return
 
-        if key in ['start','end']:
+            # Normalize strings to datetime
             if isinstance(value, str):
                 value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
-                value = self.timezone.localize(value)
 
-        elif key == 'time_start':
-            date = entry.get(self.columns['date_' + key.split('_')[1]])
-            value = date.replace(hour=value.hour, minute=value.minute, second=value.second)
-            value.tz_localize(self.timezone)
+            # Accept pandas Timestamp
+            if isinstance(value, pd.Timestamp):
+                value = value.to_pydatetime()
+
+            # Ensure timezone-aware
+            if isinstance(value, datetime) and value.tzinfo is None:
+                value = value.replace(tzinfo=self.timezone)
         
         elif key == 'duration':
-            value = timedelta(hours=value)
-        elif key not in self.ics_mapping:
+            if isinstance(value, str):
+                try:
+                    td = pd.to_timedelta(value)
+                    value = timedelta(seconds=int(td.total_seconds()))
+                except Exception:
+                    parts = value.strip().split(":")
+                    if len(parts) == 2:
+                        hours, minutes = parts
+                        seconds = "0"
+                    elif len(parts) == 3:
+                        hours, minutes, seconds = parts
+                    else:
+                        raise ValueError(f"Unsupported duration format: {value}")
+                    value = timedelta(hours=int(hours), minutes=int(minutes), seconds=int(seconds))
+            elif isinstance(value, (int, float)):
+                value = timedelta(hours=value)
+        
+        elif key not in self.VALID_FIELDS:
             return
 
+        event.add(key.upper(), value)
 
-
-        event.add(self.ics_mapping[key], value)
-
-    def generate_ical(self, timetable_data: list[dict[str, str]]) -> None:
+    def generate_ical(self, timetable_data: list[dict[str, str]], company: str="TSSAMME") -> Calendar:
         cal = Calendar()
-        cal.add('prodid', '-//TSSAMME//timetable-exporter//EN')
+        cal.add('prodid', '-//'+ company + '//timetable-exporter//EN')
         cal.add('version', '2.0')
 
         for entry in timetable_data:
@@ -76,6 +78,6 @@ class IcalGenerator:
                 value = entry.get(column)
                 self.add_event_property(event, key, value, entry)
             cal.add_component(event)
-
-        with open(self.file_name, 'wb') as f:
-            f.write(cal.to_ical())
+        
+        return cal
+    

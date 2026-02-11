@@ -1,0 +1,9 @@
+{
+  "output_dir": "output",
+  "calendars": [
+    {
+      "filename": "calendar",
+      "filter": {}
+    }
+  ]
+}

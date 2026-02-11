@@ -1,0 +1,31 @@
+{
+  "company": "timetable-exporter",
+  "user_extensions": {
+    "combine_date_time": [
+      {
+        "args": ["Date Column", "Time Column"],
+        "kwargs": {"datetime_col": "dtstart"}
+      }
+    ],
+    "rename_columns": [
+      {
+        "args": [
+          {
+            "Course Name": "summary",
+            "Room": "location",
+            "Notes": "description",
+            "DurationHours": "duration"
+          }
+        ],
+        "kwargs": {}
+      }
+    ]
+  },
+  "columns": {
+    "summary": "summary",
+    "dtstart": "dtstart",
+    "duration": "duration",
+    "location": "location",
+    "description": "description"
+  }
+}

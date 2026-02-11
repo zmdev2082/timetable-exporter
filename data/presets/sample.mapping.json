@@ -1,0 +1,26 @@
+{
+  "company": "timetable-exporter",
+  "user_extensions": {
+    "rename_columns": [
+      {
+        "args": [
+          {
+            "Summary": "summary",
+            "Start": "dtstart",
+            "Duration": "duration",
+            "Location": "location",
+            "Description": "description"
+          }
+        ],
+        "kwargs": {}
+      }
+    ]
+  },
+  "columns": {
+    "summary": "summary",
+    "dtstart": "dtstart",
+    "duration": "duration",
+    "location": "location",
+    "description": "description"
+  }
+}

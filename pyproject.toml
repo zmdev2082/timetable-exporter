@@ -3,18 +3,42 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "timetable_exporter"
-version = "0.1.0"
-description = "A module to generate iCal files from timetabling Excel sheets."
+name = "timetable-exporter"
+version = "0.2.0"
+description = "Convert spreadsheet event data into iCalendar (.ics) files and a printable weekly view."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
 authors = [
-    { name = "Zach Milgate", email = "your.email@example.com" }
+    { name = "zmdev2082", email = "helper-jolly-stoke@duck.com" }
 ]
+urls = { "Homepage" = "https://github.com/zmdev2082/timetable-exporter" }
+
 dependencies = [
     "pandas",
-    "requests",
+    "openpyxl",
+    "xlrd",
     "icalendar",
-    "openpyxl"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
 ]
 
 [project.scripts]
 timetable-exporter = "timetable_exporter.cli:timetable_exporter"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/timetable_exporter",
+    "/data/presets",
+    "/README.md",
+    "/pyproject.toml",
+]
+
+[tool.hatch.build.targets.wheel]
+include = [
+    "/timetable_exporter",
+    "/data/presets",
+]

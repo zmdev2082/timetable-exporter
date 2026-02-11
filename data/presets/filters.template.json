@@ -1,0 +1,12 @@
+{
+  "calendars": [
+    {
+      "filename": "Room_A",
+      "filter": {"location": "ROOM.A"}
+    },
+    {
+      "filename": "Subject_X",
+      "filter": {"summary": "SUBJ1001"}
+    }
+  ]
+}
