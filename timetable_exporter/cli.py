@@ -99,6 +99,71 @@ def _safe_sheet_title(title: str, used: set[str]) -> str:
     return candidate
 
 
+def _load_json_file(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _resolve_week_view_template(value: str | dict | None) -> dict | None:
+    """Resolve week view template from either a path or a preset name.
+
+    Accepts:
+    - an already-loaded dict (from code)
+    - a filesystem path to a JSON file
+    - a preset filename (e.g. "mxlab.week_view.json")
+    - a preset base name (e.g. "mxlab" -> "mxlab.week_view.json")
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    # Path on disk
+    if os.path.isfile(text):
+        return _load_json_file(text)
+
+    # Preset name/filename
+    candidates = [text]
+    if not text.endswith(".json"):
+        candidates.insert(0, f"{text}.week_view.json")
+
+    last_err: Exception | None = None
+    for cand in candidates:
+        try:
+            return _load_preset_json(cand)
+        except Exception as e:
+            last_err = e
+            continue
+
+    raise FileNotFoundError(f"File not found: {text}") from last_err
+
+
+def _save_workbook_with_fallback(wb: Workbook, output_path: str) -> str:
+    """Save workbook, falling back to a suffixed filename if the path is locked.
+
+    This keeps outputs stable (e.g. week_view.xlsx) unless the file is open in Excel.
+    """
+    try:
+        wb.save(output_path)
+        return output_path
+    except PermissionError:
+        base, ext = os.path.splitext(output_path)
+        ext = ext or ".xlsx"
+        for i in range(1, 51):
+            candidate = f"{base}_{i}{ext}"
+            try:
+                wb.save(candidate)
+                print(f"Weekly view output is locked. Wrote instead to: {candidate}")
+                return candidate
+            except PermissionError:
+                continue
+        raise
+
+
 def setup_argparse():
     parser = argparse.ArgumentParser(description='Generate an iCal file from a timetabling Excel sheet.')
     parser.add_argument('excel_file', nargs='?', type=str, help='The path of the local Excel file.')
@@ -119,7 +184,7 @@ def setup_argparse():
     parser.add_argument('--output_dir', type=str, default=None, action=ValidateDirectoryAction, help='Directory to save output iCal files (defaults to filters output_dir if present).')
     parser.add_argument('--week-view', action='store_true', help='Generate a weekly view workbook using defaults (or values from filters JSON).')
     parser.add_argument('--week-view-output', type=str, default=None, help='Weekly view output path. If filters define multiple calendars: .xlsx => one workbook with one sheet per calendar; otherwise treat as a directory and write one .xlsx per calendar.')
-    parser.add_argument('--week-view-template', type=str, action=LoadJSONAction, help='Path to weekly view template JSON (defaults to data/presets/week_view.template.json).')
+    parser.add_argument('--week-view-template', type=str, default=None, help='Weekly view template JSON: either a file path, or a preset name/filename (searched under data/presets and data/proprietary/presets).')
     parser.add_argument('--week-view-calendar', type=str, default=None, help='When filters define multiple calendars, generate weekly view for a single calendar filename.')
     parser.add_argument('--skip-extensions', type=str, default=None, help='Comma-separated list of user extension functions to skip (e.g. expand_dates).')
 
@@ -172,12 +237,17 @@ def timetable_exporter():
         if args.week_view_output is None:
             args.week_view_output = filters_payload.get("week_view_output")
         if args.week_view_template is None and filters_payload.get("week_view_template"):
-            LoadJSONAction(option_strings=['--week-view-template'], dest='week_view_template')(parser, args, filters_payload.get("week_view_template"))
+            args.week_view_template = filters_payload.get("week_view_template")
 
         # Apply global filters (optional)
         global_filters = filters_payload.get("global_filters")
         if global_filters:
             df = df.timetable.filter(global_filters, exact_match=args.exact)
+
+        # Apply global exclude filters (optional)
+        global_exclude_filters = filters_payload.get("global_exclude_filters")
+        if global_exclude_filters:
+            df = df.timetable.exclude(global_exclude_filters, exact_match=args.exact)
 
         # Check if the DataFrame is empty after filtering
         if df.empty:
@@ -210,7 +280,7 @@ def timetable_exporter():
 
         # Optional weekly view export
         if args.week_view or args.week_view_output:
-            week_view_cfg = args.week_view_template
+            week_view_cfg = _resolve_week_view_template(args.week_view_template)
             if week_view_cfg is None:
                 week_view_cfg = _load_preset_json("week_view.template.json")
 
@@ -226,12 +296,12 @@ def timetable_exporter():
                         raise ValueError(f"Calendar not found for weekly view: {args.week_view_calendar}")
                     week_view_df = df.timetable.filter(selected["filter"], exact_match=args.exact)
                     wb = build_week_view_workbook(week_view_df, week_view_cfg)
-                    wb.save(output_path)
+                    _save_workbook_with_fallback(wb, output_path)
                 elif len(calendars) == 1:
                     selected = calendars[0]
                     week_view_df = df.timetable.filter(selected["filter"], exact_match=args.exact)
                     wb = build_week_view_workbook(week_view_df, week_view_cfg)
-                    wb.save(output_path)
+                    _save_workbook_with_fallback(wb, output_path)
                 else:
                     # Multiple calendars:
                     # - if output_path ends with .xlsx => one workbook, one sheet per calendar
@@ -246,17 +316,17 @@ def timetable_exporter():
                             sheet_name = _safe_sheet_title(calendar.get("filename") or "Calendar", used_titles)
                             ws = wb.create_sheet(title=sheet_name)
                             render_week_view_worksheet(ws, week_view_df, week_view_cfg)
-                        wb.save(output_path)
+                        _save_workbook_with_fallback(wb, output_path)
                     else:
                         ValidateDirectoryAction(option_strings=['--week-view-output'], dest='week_view_output')(parser, args, output_path)
                         for calendar in calendars:
                             week_view_df = df.timetable.filter(calendar["filter"], exact_match=args.exact)
                             wb = build_week_view_workbook(week_view_df, week_view_cfg)
                             out_file = os.path.join(output_path, f"{calendar['filename']}.xlsx")
-                            wb.save(out_file)
+                            _save_workbook_with_fallback(wb, out_file)
             else:
                 wb = build_week_view_workbook(df, week_view_cfg)
-                wb.save(output_path)
+                _save_workbook_with_fallback(wb, output_path)
 
         # Process each calendar in the filters
         calendars = filters_payload.get("calendars")

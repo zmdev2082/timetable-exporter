@@ -75,3 +75,19 @@ def test_expand_dates():
     # Check if the result matches the expected output
     pd.testing.assert_frame_equal(expanded_df, expected_df)
     print("Test passed: expand_dates works as expected.")
+
+
+def test_exclude_filters_contains():
+    df = pd.DataFrame(
+        {
+            "summary": [
+                "AMME2500-S1C-ND-CC/Practical-IGN/64",
+                "AMME2500-S1C-ND-CC/Practical/63",
+                "MTRX2700-S1C-ND-CC/Practical_MP_P1/03",
+            ]
+        }
+    )
+
+    out = df.timetable.exclude({"summary": "IGN"}, exact_match=False)
+    assert len(out) == 2
+    assert out["summary"].str.contains("IGN").sum() == 0

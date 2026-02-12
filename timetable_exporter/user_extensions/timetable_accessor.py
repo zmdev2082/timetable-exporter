@@ -71,6 +71,44 @@ class TimetableAccessor:
         except Exception as e:
             raise Exception(f"Error applying filters: {e}")
         return df
+
+    def exclude(self, filters, exact_match: bool = False):
+        """Exclude rows from the DataFrame based on the provided filters.
+
+        This is the inverse of `filter()`: any row matching the criteria is removed.
+
+        :param filters: Same structure as `filter()`.
+        :param exact_match: If True, uses exact matching; otherwise uses string contains.
+        :return: A filtered DataFrame with matching rows removed.
+        """
+        df = self._obj.copy()
+        if filters is None:
+            return df
+
+        try:
+            for column, values in filters.items():
+                resolved_column = _resolve_column_name(df, column)
+                series = df[resolved_column]
+
+                if isinstance(values, list):
+                    if exact_match:
+                        mask = series.isin(values)
+                    else:
+                        mask = series.astype(str).str.contains('|'.join(values), case=False, na=False)
+                else:
+                    if exact_match:
+                        mask = series == values
+                    else:
+                        mask = series.astype(str).str.contains(str(values), case=False, na=False)
+
+                df = df.loc[~mask].copy()
+
+        except KeyError as e:
+            raise KeyError(f"Column not found in DataFrame: {e}")
+        except Exception as e:
+            raise Exception(f"Error applying exclude filters: {e}")
+
+        return df
     
     # function for calling an objects internal method on each row of a column
     def call_internal_method(self, method_name: str, column: str, *args, **kwargs):

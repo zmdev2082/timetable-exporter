@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta
 from typing import Any
+import re
 
 import pandas as pd
 from openpyxl import Workbook
@@ -22,6 +23,9 @@ class WeekViewConfig:
     week_pattern_full_term_tokens: list[str]
     week_pattern_full_term_label: str | None
     summary_transform: dict | None
+    description_col: str | None
+    summary_annotation: dict | None
+    summary_format: str | None
     days: list[str]
     start_time: time
     end_time: time
@@ -70,6 +74,9 @@ def _load_week_view_config(config: dict) -> WeekViewConfig:
     title = config.get("title")
     include_week_pattern = bool(config.get("include_week_pattern", True))
     summary_transform = config.get("summary_transform")
+    description_col = columns.get("description")
+    summary_annotation = config.get("summary_annotation")
+    summary_format = config.get("summary_format")
     week_pattern_prefix = config.get("week_pattern_prefix")
     week_pattern_full_term_tokens = config.get("week_pattern_full_term_tokens") or []
     week_pattern_full_term_label = config.get("week_pattern_full_term_label")
@@ -102,6 +109,9 @@ def _load_week_view_config(config: dict) -> WeekViewConfig:
         week_pattern_col=week_pattern_col,
         week_pattern_prefix=week_pattern_prefix,
         summary_transform=summary_transform,
+        description_col=description_col,
+        summary_annotation=summary_annotation,
+        summary_format=summary_format,
         week_pattern_full_term_tokens=week_pattern_full_term_tokens,
         week_pattern_full_term_label=week_pattern_full_term_label,
         days=days,
@@ -112,6 +122,39 @@ def _load_week_view_config(config: dict) -> WeekViewConfig:
         include_week_pattern=include_week_pattern,
         footer=footer,
     )
+
+
+def _extract_summary_annotation(row: pd.Series, cfg: WeekViewConfig) -> str | None:
+    ann_cfg = cfg.summary_annotation or {}
+    if not isinstance(ann_cfg, dict) or not ann_cfg:
+        return None
+
+    col = ann_cfg.get("column") or cfg.description_col
+    if not col:
+        return None
+
+    raw = row.get(col)
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    text = str(raw)
+
+    regex = ann_cfg.get("regex")
+    if regex:
+        try:
+            m = re.search(str(regex), text)
+        except re.error:
+            return None
+        if not m:
+            return None
+        group = ann_cfg.get("group", 1)
+        try:
+            value = m.group(int(group))
+        except Exception:
+            value = m.group(1)
+        value = str(value).strip()
+        return value or None
+
+    return None
 
 
 def _apply_cell_styles(cell, fill_color: str | None = None, bold: bool = False, align_center: bool = True):
@@ -256,9 +299,18 @@ def render_week_view_worksheet(ws, df: pd.DataFrame, config: dict) -> None:
         if end_t is None:
             continue
 
-        summary = _apply_summary_transform(row.get(cfg.summary_col, ""), cfg.summary_transform)
-        if not summary:
+        base_summary = _apply_summary_transform(row.get(cfg.summary_col, ""), cfg.summary_transform)
+        if not base_summary:
             continue
+
+        annotation = _extract_summary_annotation(row, cfg)
+        if annotation:
+            if cfg.summary_format:
+                summary = str(cfg.summary_format).format(summary=base_summary, annotation=annotation)
+            else:
+                summary = f"{base_summary} ({annotation})"
+        else:
+            summary = base_summary
 
         week_pattern = None
         if cfg.week_pattern_col:
